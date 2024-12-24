@@ -1,6 +1,6 @@
-import { Stack, Duration, CfnOutput} from 'aws-cdk-lib';
+import { Stack, Duration, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { OpenIdConnectProvider, Role, WebIdentityPrincipal, ManagedPolicy, Conditions } from 'aws-cdk-lib/aws-iam';
+import { OpenIdConnectProvider, Role, WebIdentityPrincipal, ManagedPolicy, Conditions, ArnPrincipal, CompositePrincipal } from 'aws-cdk-lib/aws-iam';
 import { GitHubStackProps } from './StackProps';
 
 export class GithubActionsStack extends Stack {
@@ -8,7 +8,7 @@ export class GithubActionsStack extends Stack {
     super(scope, id, props);
 
     const githubDomain = 'token.actions.githubusercontent.com';
-    
+
     // Github Open ID Connect Provider
     const githubProvider = new OpenIdConnectProvider(this, 'githubProvider', {
       url: `https://${githubDomain}`,
@@ -20,14 +20,18 @@ export class GithubActionsStack extends Stack {
     // Grant only requests coming from a specific GitHub repository
     const conditions: Conditions = {
       StringLike: {
-        [`${githubDomain}:aud`]: "sts.amazonaws.com",
+        [`${githubDomain}:aud`]: 'sts.amazonaws.com',
         [`${githubDomain}:sub`]: iamRepoDeployAccess,
       },
     };
 
     // Github Actions role
     const actionsRole = new Role(this, 'GitHubActionsDeployRole', {
-      assumedBy: new WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, conditions),
+      assumedBy: new CompositePrincipal(
+        new WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, conditions),
+        // Added to allow AppSync integration tests to assume a role to run the tests
+        new ArnPrincipal(`arn:aws:iam::${this.account}:role/aws-reserved/sso.amazonaws.com/*`)
+      ),
       managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess')],
       roleName: 'GitHubActionsDeployRole',
       description: 'Used by GitHub Actions to deploy CDK stacks',
@@ -35,8 +39,8 @@ export class GithubActionsStack extends Stack {
     });
 
     /***
-     *** Outputs 
-    ***/
+     *** Outputs
+     ***/
 
     new CfnOutput(this, 'GithubOpenIdConnectProviderArn', {
       value: githubProvider.openIdConnectProviderArn,
