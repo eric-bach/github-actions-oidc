@@ -17,6 +17,7 @@ export class GithubActionsStack extends Stack {
 
     // Allows all repo in Github org
     const iamRepoDeployAccess = props.repositoryConfig.map((r) => `repo:${r.owner}/${r.repo ?? '*'}:${r.filter ?? '*'}`);
+
     // Grant only requests coming from a specific GitHub repository
     const conditions: Conditions = {
       StringLike: {
@@ -28,9 +29,10 @@ export class GithubActionsStack extends Stack {
     // Github Actions role
     const actionsRole = new Role(this, 'GitHubActionsDeployRole', {
       assumedBy: new CompositePrincipal(
-        new WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, conditions),
+        new WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, conditions)
+
         // Added to allow AppSync integration tests to assume a role to run the tests
-        new ArnPrincipal(`arn:aws:iam::${this.account}:role/aws-reserved/sso.amazonaws.com/*`)
+        // new ArnPrincipal(`arn:aws:iam::${this.account}:role/aws-reserved/sso.amazonaws.com/*`)
       ),
       managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess')],
       roleName: 'GitHubActionsDeployRole',
